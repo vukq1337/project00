@@ -1,63 +1,70 @@
-import sqlite3
 import requests
-from bs4 import BeautifulSoup as bs
+from bs4 import BeautifulSoup
+import sqlite3
 
-class DatabaseObject:
-    def __init__(self, db_name="sites.db"):
-        self.db_name = db_name
-        self.connection = sqlite3.connect(db_name)
-        self.cursor = self.connection.cursor()
+conn = sqlite3.connect('sites.db')
+c = conn.cursor()
 
-    def create_table(self):
-        self.cursor.execute('''CREATE TABLE IF NOT EXISTS sites
-                               (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                                url TEXT,
-                                content TEXT)''')
-        self.connection.commit()
+c.execute('''CREATE TABLE IF NOT EXISTS sites (id INTEGER PRIMARY KEY AUTOINCREMENT, url TEXT NOT NULL)''')
 
-    def add_site(self, url, content):
-        self.cursor.execute("INSERT INTO sites (url, content) VALUES (?, ?)", (url, content))
-        self.connection.commit()
+def add_site():
+    url = input('Enter the URL of the website you want to add: ')
+    c.execute('''INSERT INTO sites (url) VALUES (?)''',(url, ))
+    conn.commit()
+    print('The website has been added successfully.')
 
-    def clear_database(self):
-        self.cursor.execute("DELETE FROM sites")
-        self.connection.commit()
+def remove_site():
+    url = input('Enter the URL of the website you want to remove: ')
+    c.execute('''DELETE FROM sites WHERE url=?''', (url, ))
+    conn.commit()
+    print('The website has been removed successfully.')
 
-    def get_sites(self):
-        self.cursor.execute("SELECT * FROM sites")
-        return self.cursor.fetchall()
+def clear_database():
+    c.execute('''DELETE FROM sites''')
+    conn.commit()
+    print('The database has been cleared successfully.')
 
-class ParserObject:
-    def parse_website(self, url):
-        response = requests.get(url)
-        return response.text
+def search_website(url, query):
+    r = requests.get(url)
+    soup = BeautifulSoup(r.content, 'html.parser')
+    count = soup.text.count(query)
+    return count
 
-class UserInterfaceObject:
-    def get_user_input(self):
-        return input("Enter a website URL: ")
+def search_websites(query):
+    results = []
+    c.execute('''SELECT * FROM sites''')
+    rows = c.fetchall()
+    for row in rows:
+        url = row[1]
+        count = search_website(url, query)
+        results.append((url, count))
+        results.sort(key=lambda x: x[1], reverse=True)
 
-    def display_results(self, results):
-        for result in results:
-            print(result)
+    print('Search results: ')
+    for result in results:
+        print(result[0], "-", result[1])
 
-def run():
-    database = DatabaseObject()
-    parser = ParserObject()
-    user_interface = UserInterfaceObject()
+while True:
+    print("What would you like to do?")
+    print("1. Add a website to the database")
+    print("2. Remove a website from the database")
+    print("3. Clear the database")
+    print("4. Search for information on websites")
+    print("5. Exit")
+    choice = input("Enter your choice: ")
 
-    database.create_table()
+    if choice == "1":
+        add_site()
+    elif choice == "2":
+        remove_site()
+    elif choice == "3":
+        clear_database()
+    elif choice == "4":
+        query = input("Enter the information you want to search for: ")
+        search_websites(query)
+    elif choice == "5":
+        break
+    else:
+        print("Invalid choice. Please try again.")
 
-    while True:
-        user_input = user_interface.get_user_input()
-
-        if user_input.lower() == "exit":
-            break
-
-        content = parser.parse_website(user_input)
-        database.add_site(user_input, content)
-
-    results = database.get_sites()
-    user_interface.display_results(results)
-
-if __name__ == "__main__":
-    run()
+conn.close()
